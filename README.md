@@ -13,7 +13,7 @@ A premium offline-first streaming platform.
 
 ## Architecture Diagram
 
-[arch diagram](uml.png) 
+![arch diagram](uml.png) 
 
 ---
 
