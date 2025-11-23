@@ -1,0 +1,123 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users table
+model User {
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  password_hash String
+  role          String         @default("user")
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+  
+  // Relations
+  progress      Progress[]
+  favorites     Favorite[]
+  notifications Notification[]
+  fcm_tokens    FcmToken[]
+}
+
+// Videos metadata (cached from YouTube)
+model Video {
+  video_id       String     @id
+  title          String
+  description    String?    @db.Text
+  thumbnail_url  String
+  channel_id     String
+  channel_title  String
+  published_at   DateTime
+  duration_seconds Int
+  created_at     DateTime   @default(now())
+  
+  // Relations
+  progress       Progress[]
+  favorites      Favorite[]
+}
+
+// User video progress
+model Progress {
+  id                String   @id @default(uuid())
+  user_id           String
+  video_id          String
+  position_seconds  Int      @default(0)
+  completed_percent Int      @default(0)
+  updated_at        DateTime @updatedAt
+  synced            Boolean  @default(false)
+  
+  user User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [video_id], onDelete: Cascade)
+  
+  @@unique([user_id, video_id])
+  @@index([user_id])
+}
+
+// User favorites
+model Favorite {
+  id         String   @id @default(uuid())
+  user_id    String
+  video_id   String
+  created_at DateTime @default(now())
+  synced     Boolean  @default(false)
+  
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [video_id], references: [video_id], onDelete: Cascade)
+  
+  @@unique([user_id, video_id])
+  @@index([user_id])
+}
+
+// Push notifications
+model Notification {
+  id           String   @id @default(uuid())
+  user_id      String?
+  title        String
+  body         String   @db.Text
+  metadata     Json?
+  received_at  DateTime @default(now())
+  is_read      Boolean  @default(false)
+  is_deleted   Boolean  @default(false)
+  sent         Boolean  @default(false)
+  
+  user User? @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  jobs NotificationJob[]
+  
+  @@index([user_id, is_deleted])
+}
+
+// Notification job queue (for worker)
+model NotificationJob {
+  id              String    @id @default(uuid())
+  notification_id String
+  status          String    @default("pending") // pending, processing, sent, failed
+  retries         Int       @default(0)
+  last_error      String?   @db.Text
+  message_id      String?
+  created_at      DateTime  @default(now())
+  processing_at   DateTime?
+  sent_at         DateTime?
+  
+  notification Notification @relation(fields: [notification_id], references: [id], onDelete: Cascade)
+  
+  @@index([status])
+}
+
+// FCM tokens for push notifications
+model FcmToken {
+  id         String   @id @default(uuid())
+  user_id    String
+  token      String   @unique
+  platform   String   // android, ios, web
+  created_at DateTime @default(now())
+  
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@index([user_id])
+}
